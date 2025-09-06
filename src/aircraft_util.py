@@ -1,57 +1,101 @@
 import numpy as np
+from numpy import float64
+from numpy._typing import NDArray
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from stl import mesh
 
 # Matrices de rotacion y normalizar
-def normalize(v, eps=1e-12): # normaliza los vectores, sirve para despues plotear
-    n = np.linalg.norm(v)
+def normalize(v, eps=1e-12) -> NDArray[float64]:
+    """Normaliza los vectores, sirve para despues plotear
+
+    Args:
+        v (_type_): _description_
+        eps (_type_, optional): _description_. Defaults to 1e-12.
+
+    Returns:
+        NDArray[float64]: _description_
+    """
+    n: float = np.linalg.norm(v)
     return v if n < eps else v / n
 
-def rotz(angle):
+def rotz(angle) -> NDArray[float64]:
+    """Rotacion de matriz alrededor de eje Z
+
+    Args:
+        angle (_type_): _description_
+
+    Returns:
+        NDArray[float64]: _description_
+    """
     c, s = np.cos(angle), np.sin(angle)
     return np.array([[c, -s, 0],
                      [s,  c, 0],
                      [0,  0, 1]], float)
 
-def roty(angle):
+def roty(angle) -> NDArray[float64]:
+    """Rotacion de matriz alrededor de eje Y
+
+    Args:
+        angle (_type_): _description_
+
+    Returns:
+        NDArray[float64]: _description_
+    """
     c, s = np.cos(angle), np.sin(angle)
     return np.array([[ c, 0, s],
                      [ 0, 1, 0],
                      [-s, 0, c]], float)
 
 # Cálculo de α, β desde (u,v,w) y viento 
-def alpha_beta_from_body(u, v, w, uw=0.0, vw=0.0, ww=0.0):
-    """
-    Calcula alpha (AoA) y beta (sideslip) en rad a partir de la velocidad
+def alpha_beta_from_body(u, v, w, uw=0.0, vw=0.0, ww=0.0) -> tuple[float, float, NDArray[float64], NDArray[float64]]:
+    """Calcula alpha (AoA) y beta (sideslip) en rad a partir de la velocidad
     relativa al viento en ejes BODY. Devuelve (alpha, beta, Vhat_b, V_air_b).
+
+    Args:
+        u (_type_): _description_
+        v (_type_): _description_
+        w (_type_): _description_
+        uw (float, optional): _description_. Defaults to 0.0.
+        vw (float, optional): _description_. Defaults to 0.0.
+        ww (float, optional): _description_. Defaults to 0.0.
+
+    Returns:
+        tuple[float, float, NDArray[float64], NDArray[float64]]: _description_
     """
     ur, vr, wr = u - uw, v - vw, w - ww # calcula el movimiento relativo al viento
-    V_air_b = np.array([ur, vr, wr], float)
-    Vmag    = np.linalg.norm(V_air_b) or 1e-12 #np.linalg saca la magnitud del vector
-    Vhat_b  = V_air_b / Vmag
+    V_air_b: NDArray[float64] = np.array([ur, vr, wr], float)
+    Vmag: float = np.linalg.norm(V_air_b) or 1e-12 #np.linalg saca la magnitud del vector
+    Vhat_b: NDArray[float64]  = V_air_b / Vmag
 
-    alpha = np.arctan2(wr, ur)                         # [rad]
-    beta  = np.arcsin(np.clip(vr / Vmag, -1.0, 1.0))   # [rad]
+    alpha: float = np.arctan2(wr, ur)                         # [rad]
+    beta: float  = np.arcsin(np.clip(vr / Vmag, -1.0, 1.0))   # [rad]
     return alpha, beta, Vhat_b, V_air_b
 
 # Vectores
-def build_vectors(Vhat_b, alpha, beta):
-    """
-    Devuelve un dict con:
-      Vhat_b        : dirección de la velocidad en BODY
-      V_alpha_b     : Vhat_b @ Rz(alpha)
-      V_beta_b      : Vhat_b @ Rz(alpha) @ Ry(beta)
-      V_rotY90_b    : Rotación +90° alrededor de Y aplicada a Vhat_b
-      V_rotZneg_b   : Rotación -90° alrededor de Z aplicada a Vhat_b
-    """
-    V_alpha_b = normalize(Vhat_b @ rotz(alpha)) #normaliza el vector y lo rota 
-    V_beta_b  = normalize(Vhat_b @ rotz(alpha) @ roty(beta)) #normaliza el vector y lo rota 
+def build_vectors(Vhat_b: NDArray[float64], alpha: float, beta: float) -> dict[str, NDArray[float64]]:
+    """_summary_
 
-    RotY_90  = np.array([[0,0,1],[0,1,0],[-1,0,0]], float)  # +90° Y esto tener los vectores del cuerpo
-    RotZ_m90 = np.array([[0,1,0],[-1,0,0],[0,0,1]], float)  # -90° Z
-    V_rotY90_b  = normalize(RotY_90  @ Vhat_b)
-    V_rotZneg_b = normalize(RotZ_m90 @ Vhat_b)
+    Args:
+        Vhat_b (NDArray[float64]): _description_
+        alpha (float): _description_
+        beta (float): _description_
+
+    Returns:
+        dict[str, NDArray[float64]]: 
+            Vhat_b        : dirección de la velocidad en BODY
+            V_alpha_b     : Vhat_b @ Rz(alpha)
+            V_beta_b      : Vhat_b @ Rz(alpha) @ Ry(beta)
+            V_rotY90_b    : Rotación +90° alrededor de Y aplicada a Vhat_b
+            V_rotZneg_b   : Rotación -90° alrededor de Z aplicada a Vhat_b
+    """
+    V_alpha_b: NDArray[float64] = normalize(Vhat_b @ rotz(alpha)) #normaliza el vector y lo rota 
+    V_beta_b: NDArray[float64] = normalize(Vhat_b @ rotz(alpha) @ roty(beta)) #normaliza el vector y lo rota 
+
+    RotY_90 : NDArray[float64] = np.array([[0,0,1],[0,1,0],[-1,0,0]], float)  # +90° Y esto tener los vectores del cuerpo
+    RotZ_m90: NDArray[float64] = np.array([[0,1,0],[-1,0,0],[0,0,1]], float)  # -90° Z
+    V_rotY90_b: NDArray[float64]  = normalize(RotY_90  @ Vhat_b)
+    V_rotZneg_b: NDArray[float64] = normalize(RotZ_m90 @ Vhat_b)
 
     return {
         "Vhat_b": Vhat_b,
